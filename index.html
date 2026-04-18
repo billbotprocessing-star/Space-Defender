@@ -1,1 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attorney Status Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #080C10;
+  --bg2:       #0D1117;
+  --bg3:       #111820;
+  --bg4:       #161E28;
+  --surface:   #1A2332;
+  --surface2:  #1F2B3E;
+  --border:    rgba(99,179,237,0.12);
+  --border2:   rgba(99,179,237,0.22);
+  --border3:   rgba(99,179,237,0.4);
+  --text:      #E8F0F8;
+  --text2:     #7A9BB8;
+  --text3:     #4A6A88;
+  --cyan:      #00D4FF;
+  --cyan-dim:  rgba(0,212,255,0.12);
+  --cyan-glow: rgba(0,212,255,0.06);
+  --red:       #FF4560;
+  --red-dim:   rgba(255,69,96,0.12);
+  --amber:     #FFB020;
+  --amber-dim: rgba(255,176,32,0.12);
+  --green:     #00E5A0;
+  --green-dim: rgba(0,229,160,0.1);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Space Grotesk', sans-serif;
+  --r: 6px;
+  --r-lg: 10px;
+}
 
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Header ── */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(8,12,16,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-mark {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cyan);
+}
+.logo-mark::before {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 8px;
+  background: var(--cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--cyan);
+  animation: pulse 2.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity:1; box-shadow:0 0 8px var(--cyan); }
+  50% { opacity:0.5; box-shadow:0 0 2px var(--cyan); }
+}
+.logo-sep { color: var(--text3); margin: 0 6px; }
+
+.header-actions { display: flex; gap: 8px; align-items: center; }
+
+/* ── Buttons ── */
+button, .btn-label {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--r);
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  padding: 7px 14px;
+}
+.btn-ghost:hover {
+  border-color: var(--border3);
+  color: var(--text);
+  background: rgba(99,179,237,0.05);
+}
+.btn-cyan {
+  background: var(--cyan-dim);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: var(--cyan);
+  padding: 7px 16px;
+}
+.btn-cyan:hover {
+  background: rgba(0,212,255,0.18);
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0,212,255,0.15);
+}
+.btn-red {
+  background: transparent;
+  border: 1px solid rgba(255,69,96,0.25);
+  color: #FF7088;
+  padding: 7px 14px;
+}
+.btn-red:hover {
+  background: var(--red-dim);
+  border-color: rgba(255,69,96,0.5);
+}
+.btn-label {
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  padding: 7px 14px;
+}
+.btn-label:hover {
+  border-color: var(--border3);
+  color: var(--text);
+  background: rgba(99,179,237,0.05);
+}
+
+/* ── Layout ── */
+.container {
+  position: relative;
+  z-index: 1;
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* ── Stats ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 12px;
+  margin-bottom: 1.5rem;
+}
+.stat-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+}
+.stat-card.c-cyan::before { background: linear-gradient(90deg, transparent, var(--cyan), transparent); }
+.stat-card.c-red::before  { background: linear-gradient(90deg, transparent, var(--red), transparent); }
+.stat-card.c-amber::before{ background: linear-gradient(90deg, transparent, var(--amber), transparent); }
+.stat-card.c-green::before{ background: linear-gradient(90deg, transparent, var(--green), transparent); }
+
+.stat-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+.stat-value {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1;
+}
+.stat-value.cyan  { color: var(--cyan); }
+.stat-value.red   { color: var(--red); }
+.stat-value.amber { color: var(--amber); }
+.stat-value.green { color: var(--green); }
+
+/* ── Upload Zone ── */
+.upload-zone {
+  border: 1px dashed var(--border2);
+  border-radius: var(--r-lg);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+  background: var(--bg3);
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.upload-zone::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(0,212,255,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+.upload-zone:hover, .upload-zone.drag {
+  border-color: rgba(0,212,255,0.4);
+  background: var(--bg4);
+  box-shadow: inset 0 0 40px rgba(0,212,255,0.04);
+}
+.uz-icon {
+  font-size: 26px;
+  margin-bottom: 10px;
+  color: var(--text3);
+}
+.upload-zone strong {
+  font-size: 14px;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.upload-zone p {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 0.04em;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.search-wrap {
+  flex: 1;
+  min-width: 220px;
+  position: relative;
+}
+.search-wrap::before {
+  content: '⌕';
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text3);
+  font-size: 16px;
+  pointer-events: none;
+}
+.toolbar input[type=text] {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 9px 12px 9px 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg3);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+  letter-spacing: 0.03em;
+}
+.toolbar input[type=text]:focus { border-color: rgba(0,212,255,0.4); box-shadow: 0 0 0 3px rgba(0,212,255,0.06); }
+.toolbar input[type=text]::placeholder { color: var(--text3); }
+.toolbar select {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg3);
+  color: var(--text2);
+  outline: none;
+  cursor: pointer;
+  min-width: 175px;
+  letter-spacing: 0.04em;
+}
+.toolbar select:focus { border-color: rgba(0,212,255,0.4); }
+
+/* ── Save Banner ── */
+.save-banner {
+  display: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--green);
+  background: var(--green-dim);
+  border: 1px solid rgba(0,229,160,0.2);
+  border-radius: var(--r);
+  padding: 5px 11px;
+}
+
+/* ── Table ── */
+.table-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.table-scroll { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+thead { background: var(--bg3); }
+th {
+  text-align: left;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 400;
+}
+td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  word-break: break-word;
+  transition: background 0.1s;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(99,179,237,0.03); }
+tbody tr.priority { border-left: 2px solid var(--red); }
+tbody tr.priority td:first-child { padding-left: 10px; }
+
+.col-fl  { width: 42px; }
+.col-as  { width: 11%; }
+.col-nm  { width: 11%; }
+.col-ad  { width: 12%; }
+.col-ac  { width: 8%; }
+.col-ba  { width: 8%; }
+.col-at  { width: 10%; }
+.col-st  { width: 8%; }
+.col-no  { width: 12%; }
+.col-fi  { width: 110px; }
+.col-ac2 { width: 90px; }
+
+/* ── Badge ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.badge::before {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.badge.atty {
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid rgba(255,69,96,0.25);
+}
+.badge.atty::before { background: var(--red); box-shadow: 0 0 4px var(--red); }
+.badge.other {
+  background: rgba(74,106,136,0.15);
+  color: var(--text3);
+  border: 1px solid var(--border);
+}
+.badge.other::before { background: var(--text3); }
+
+/* ── Icon buttons ── */
+.icon-btn {
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 5px 6px;
+  border-radius: var(--r);
+  color: var(--text3);
+  font-size: 13px;
+  line-height: 1;
+  transition: all 0.12s;
+}
+.icon-btn:hover {
+  color: var(--cyan);
+  border-color: var(--border2);
+  background: var(--cyan-dim);
+}
+.icon-btn.del:hover {
+  color: var(--red);
+  border-color: rgba(255,69,96,0.25);
+  background: var(--red-dim);
+}
+
+.flag-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text3);
+  opacity: 0.3;
+  transition: all 0.15s;
+  display: block;
+  margin: 0 auto;
+}
+.flag-btn.on {
+  opacity: 1;
+  color: var(--red);
+  filter: drop-shadow(0 0 4px rgba(255,69,96,0.5));
+}
+.flag-btn:hover { opacity: 0.7; }
+
+/* ── Empty ── */
+.empty-state {
+  padding: 4rem 2rem;
+  text-align: center;
+  color: var(--text3);
+  font-size: 13px;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+.empty-icon {
+  font-size: 28px;
+  margin-bottom: 12px;
+  opacity: 0.25;
+  display: block;
+}
+
+/* ── Overlay ── */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(4,8,14,0.75);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.overlay.open { display: flex; }
+.modal {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-lg);
+  padding: 0;
+  width: 540px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideUp 0.2s ease;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,212,255,0.06);
+}
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity:0; }
+  to   { transform: none; opacity:1; }
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg4);
+}
+.modal-header h3 {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+.modal-body { padding: 1.5rem; }
+.modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text3);
+  padding: 3px 7px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.12s;
+}
+.modal-close:hover { color: var(--text); background: var(--surface); }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-grid .full { grid-column: 1/-1; }
+.form-row { display: flex; flex-direction: column; gap: 6px; }
+.form-row label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.form-row input,
+.form-row textarea {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg2);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+  letter-spacing: 0.03em;
+}
+.form-row input:focus,
+.form-row textarea:focus {
+  border-color: rgba(0,212,255,0.4);
+  box-shadow: 0 0 0 3px rgba(0,212,255,0.06);
+}
+.form-row input::placeholder,
+.form-row textarea::placeholder { color: var(--text3); }
+.form-row textarea { resize: vertical; min-height: 76px; }
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg4);
+}
+
+/* ── History ── */
+.hist-entry {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.hist-entry:last-child { border-bottom: none; }
+.hist-meta {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+  margin-bottom: 3px;
+}
+.hist-type {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--cyan);
+  letter-spacing: 0.04em;
+}
+.hist-change { color: var(--text2); font-size: 12px; margin-top: 1px; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--surface); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--surface2); }
+
+/* ── File pills ── */
+.file-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: rgba(0,212,255,0.07);
+  border: 1px solid rgba(0,212,255,0.18);
+  color: var(--cyan);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.12s;
+  margin: 2px 2px 2px 0;
+}
+.file-pill:hover { background: rgba(0,212,255,0.14); border-color: rgba(0,212,255,0.4); }
+.file-pill .del-f {
+  color: var(--red);
+  font-size: 10px;
+  line-height: 1;
+  padding: 0 0 0 3px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.file-pill .del-f:hover { opacity: 1; }
+.file-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: transparent;
+  border: 1px dashed var(--border2);
+  color: var(--text3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+  margin: 2px 0;
+}
+.file-add-btn:hover { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
+.files-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+/* ── PDF viewer modal ── */
+.pdf-modal {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-lg);
+  width: 860px;
+  max-width: 100%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: slideUp 0.2s ease;
+}
+.pdf-modal iframe {
+  flex: 1;
+  border: none;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  min-height: 500px;
+  background: #fff;
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; color: #000; font-size: 11px; }
+  body::before { display: none; }
+  .site-header { position: static; background: #000; height: auto; padding: 12px 1.5rem; }
+  .logo { color: #fff; }
+  .print-header { display: block !important; }
+  .table-wrap { border: 1px solid #ccc; border-radius: 0; }
+  .bg2, .bg3, .bg4 { background: #fff; }
+  table { font-size: 10px; }
+  th { background: #f0f0f0; color: #555; border-bottom: 1px solid #ccc; }
+  td { border-bottom: 1px solid #eee; color: #000; }
+  .badge.atty { background: #fee; color: #c00; border: 1px solid #fcc; }
+  .stat-card { border: 1px solid #ccc; background: #f9f9f9; }
+  .stat-label { color: #666; }
+  .stat-value { color: #000; }
+  .stats-grid { gap: 8px; margin-bottom: 1rem; }
+  td, th { padding: 5px 8px; }
+}
+.print-header {
+  display: none;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.print-header h2 { font-size: 15px; font-weight: 500; font-family: var(--mono); letter-spacing: 0.06em; }
+.print-header p  { font-size: 11px; color: var(--text3); font-family: var(--mono); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header class="site-header no-print">
+  <div class="logo">
+    <div class="logo-mark">ATTRK</div>
+    <span class="logo-sep">/</span>
+    Attorney Status Tracker
+  </div>
+  <div class="header-actions">
+    <span class="save-banner" id="saveBanner">&#10003;&nbsp;SAVED</span>
+    <label class="btn-label">
+      &#8679;&nbsp;Upload Excel
+      <input type="file" accept=".xlsx,.xls,.csv" id="fileInput" style="display:none">
+    </label>
+    <button class="btn-cyan" onclick="openAdd()">+ Add record</button>
+    <button class="btn-ghost" onclick="printReport()">&#9113;&nbsp;Print</button>
+    <button class="btn-red" onclick="clearAll()">&#10005;&nbsp;Clear</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="print-header">
+    <h2>ATTORNEY STATUS REPORT // COLLECTIONS</h2>
+    <p id="printDate"></p>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card c-cyan">
+      <div class="stat-label">Total records</div>
+      <div class="stat-value cyan" id="sTotal">0</div>
+    </div>
+    <div class="stat-card c-red">
+      <div class="stat-label">Attorney status</div>
+      <div class="stat-value red" id="sAtty">0</div>
+    </div>
+    <div class="stat-card c-amber">
+      <div class="stat-label">Priority flagged</div>
+      <div class="stat-value amber" id="sFlag">0</div>
+    </div>
+    <div class="stat-card c-green">
+      <div class="stat-label">Attorney balance</div>
+      <div class="stat-value green" id="sBal">$0.00</div>
+    </div>
+  </div>
+
+  <div class="upload-zone no-print" id="dropZone">
+    <div class="uz-icon">&#8679;</div>
+    <strong>Drop Excel file here or click "Upload Excel"</strong>
+    <p>READS: ASSOCIATION NAME &middot; OWNER NAME &middot; PROPERTY ADDRESS &middot; ACCOUNT # &middot; BALANCE &middot; ATTORNEY NAME &middot; ALTERNATE STATUS</p>
+  </div>
+
+  <div class="toolbar no-print">
+    <div class="search-wrap">
+      <input type="text" id="searchBox" placeholder="search name, address, account..." oninput="render()">
+    </div>
+    <select id="filterSel" onchange="render()">
+      <option value="attorney">ATTORNEY STATUS ONLY</option>
+      <option value="all">ALL RECORDS</option>
+      <option value="priority">PRIORITY FLAGGED</option>
+    </select>
+    <select id="sortSel" onchange="render()">
+      <option value="none">SORT: DEFAULT</option>
+      <option value="assoc_asc">ASSOCIATION A → Z</option>
+      <option value="assoc_desc">ASSOCIATION Z → A</option>
+    </select>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-fl no-print"></th>
+            <th class="col-as">Association</th>
+            <th class="col-nm">Owner name</th>
+            <th class="col-ad">Property address</th>
+            <th class="col-ac">Account #</th>
+            <th class="col-ba">Balance</th>
+            <th class="col-at">Attorney</th>
+            <th class="col-st">Status</th>
+            <th class="col-no">Notes</th>
+            <th class="col-fi no-print">Files</th>
+            <th class="col-ac2 no-print">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="emptyMsg">
+      <span class="empty-icon">&#9783;</span>
+      upload a file or add a record to begin
+    </div>
+  </div>
+</div>
+
+<!-- Edit / Add Modal -->
+<div class="overlay no-print" id="editOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">Edit record</h3>
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-row full">
+          <label>Association name</label>
+          <input type="text" id="fAssoc" placeholder="association / community name">
+        </div>
+        <div class="form-row">
+          <label>Owner name</label>
+          <input type="text" id="fName" placeholder="full name">
+        </div>
+        <div class="form-row">
+          <label>Account #</label>
+          <input type="text" id="fAcct" placeholder="account number">
+        </div>
+        <div class="form-row full">
+          <label>Property address</label>
+          <input type="text" id="fAddr" placeholder="street, city, state zip">
+        </div>
+        <div class="form-row">
+          <label>Balance owed</label>
+          <input type="text" id="fBal" placeholder="e.g. 2500.00">
+        </div>
+        <div class="form-row">
+          <label>Attorney name</label>
+          <input type="text" id="fAtty" placeholder="attorney / firm">
+        </div>
+        <div class="form-row full">
+          <label>Alternate status</label>
+          <input type="text" id="fStat" placeholder="e.g. Attorney, Collections...">
+        </div>
+        <div class="form-row full">
+          <label>Notes</label>
+          <textarea id="fNote" placeholder="add notes or follow-up details..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn-cyan" onclick="saveEdit()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF Viewer Modal -->
+<div class="overlay no-print" id="pdfOverlay">
+  <div class="pdf-modal">
+    <div class="modal-header">
+      <h3 id="pdfTitle">// Document viewer</h3>
+      <button class="modal-close" onclick="closePdf()">&#x2715;</button>
+    </div>
+    <iframe id="pdfFrame" src="about:blank"></iframe>
+  </div>
+</div>
+<div class="overlay no-print" id="histOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="histTitle">Status history</h3>
+      <button class="modal-close" onclick="closeHist()">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="histBody" style="max-height:380px;overflow-y:auto;padding-top:0.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeHist()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORE_KEY = 'atty_tracker_v2';
+let records = [], history = {}, editingId = null;
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) { const d = JSON.parse(raw); records = d.records||[]; history = d.history||{}; }
+  } catch(e) {}
+}
+
+function saveToStorage() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({records, history}));
+    const b = document.getElementById('saveBanner');
+    b.style.display = 'inline-block';
+    clearTimeout(b._t);
+    b._t = setTimeout(() => b.style.display = 'none', 2000);
+  } catch(e) {}
+}
+
+function isAtty(v) { return v && String(v).toLowerCase().includes('attorney'); }
+
+function fmtBal(v) {
+  const n = parseFloat(String(v||'').replace(/[$,]/g,''));
+  if (isNaN(n)) return v||'—';
+  return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function colIdx(headers,...kws) {
+  for (const kw of kws) {
+    const i = headers.findIndex(h => h && String(h).toLowerCase().includes(kw));
+    if (i>-1) return i;
+  }
+  return -1;
+}
+
+function uid() { return 'r'+Date.now()+Math.random().toString(36).slice(2,6); }
+
+function addHist(id, type, from, to) {
+  if (!history[id]) history[id]=[];
+  history[id].push({date:new Date().toLocaleString(), type, from:from||'—', to:to||'—'});
+}
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result,{type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if (rows.length<2) return;
+    const h = rows[0].map(x=>String(x));
+    const iN=colIdx(h,'owner','name'), iA=colIdx(h,'address','addr','property'),
+          iAc=colIdx(h,'account','acct'), iB=colIdx(h,'balance','amount','owed'),
+          iAt=colIdx(h,'attorney name','attorney','atty'), iS=colIdx(h,'alternate status','alt status','status','collection'),
+          iAs=colIdx(h,'association','assoc','community','hoa');
+    const newRecs=[];
+    for (let i=1;i<rows.length;i++) {
+      const r=rows[i];
+      if (r.every(c=>c==='')) continue;
+      newRecs.push({id:uid(), assoc:iAs>-1?r[iAs]:'', name:iN>-1?r[iN]:'', address:iA>-1?r[iA]:'', account:iAc>-1?r[iAc]:'',
+        balance:iB>-1?r[iB]:'', attyName:iAt>-1?r[iAt]:'', status:iS>-1?r[iS]:'', note:'', flagged:false});
+    }
+    records=[...records,...newRecs];
+    document.getElementById('dropZone').style.display='none';
+    saveToStorage(); render();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function updateStats() {
+  const ar = records.filter(r=>isAtty(r.status));
+  document.getElementById('sTotal').textContent = records.length;
+  document.getElementById('sAtty').textContent  = ar.length;
+  document.getElementById('sFlag').textContent  = records.filter(r=>r.flagged).length;
+  const tot = ar.reduce((a,r)=>{const n=parseFloat(String(r.balance).replace(/[$,]/g,''));return a+(isNaN(n)?0:n);},0);
+  document.getElementById('sBal').textContent = '$'+tot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function render() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const f = document.getElementById('filterSel').value;
+  const s = document.getElementById('sortSel').value;
+  let src = [...records];
+  if (f==='attorney') src=src.filter(r=>isAtty(r.status));
+  if (f==='priority') src=src.filter(r=>r.flagged);
+  if (q) src=src.filter(r=>[r.assoc,r.name,r.address,r.account].some(v=>String(v).toLowerCase().includes(q)));
+  if (s==='assoc_asc')  src.sort((a,b)=>String(a.assoc||'').localeCompare(String(b.assoc||'')));
+  if (s==='assoc_desc') src.sort((a,b)=>String(b.assoc||'').localeCompare(String(a.assoc||'')));
+
+  const tbody=document.getElementById('tbody');
+  const empty=document.getElementById('emptyMsg');
+  updateStats();
+
+  if (!src.length) {
+    tbody.innerHTML='';
+    empty.style.display='block';
+    const t=empty.querySelector('span')?empty.querySelector('span').nextSibling:null;
+    if(empty.lastChild) empty.lastChild.textContent = records.length ? ' no records match filter' : ' upload a file or add a record to begin';
+    return;
+  }
+  empty.style.display='none';
+
+  tbody.innerHTML = src.map(r=>`
+    <tr class="${r.flagged?'priority':''}" id="tr_${r.id}">
+      <td class="col-fl no-print" style="text-align:center">
+        <button class="flag-btn ${r.flagged?'on':''}" title="${r.flagged?'Remove priority':'Flag priority'}" onclick="toggleFlag('${r.id}')">&#9872;</button>
+      </td>
+      <td style="font-size:12px;color:var(--cyan);font-family:var(--mono)">${r.assoc||'<span style="color:var(--text3)">—</span>'}</td>
+      <td style="font-weight:${r.flagged?'500':'300'}">
+        ${r.name||'<span style="color:var(--text3)">—</span>'}
+      </td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${r.address||'<span style="color:var(--text3)">—</span>'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${r.account||'<span style="color:var(--text3)">—</span>'}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:${isAtty(r.status)?'var(--red)':'var(--text)'}">${fmtBal(r.balance)}</td>
+      <td style="font-size:12px;color:var(--text2)">${r.attyName||'<span style="color:var(--text3)">—</span>'}</td>
+      <td>${r.status?`<span class="badge ${isAtty(r.status)?'atty':'other'}">${r.status}</span>`:'<span style="color:var(--text3)">—</span>'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${r.note||'<span style="color:var(--text3)">—</span>'}</td>
+      <td class="col-fi no-print">
+        <div class="files-cell" id="fc_${r.id}">
+          ${renderFilePills(r.id)}
+          <label class="file-add-btn" title="Attach PDF">
+            + PDF
+            <input type="file" accept="application/pdf" style="display:none" onchange="attachFile('${r.id}',this)">
+          </label>
+        </div>
+      </td>
+      <td class="col-ac2 no-print" style="white-space:nowrap">
+        <button class="icon-btn" title="Edit" onclick="openEdit('${r.id}')">&#9998;</button>
+        <button class="icon-btn" title="History" onclick="openHist('${r.id}')">&#9776;</button>
+        <button class="icon-btn del" title="Delete" onclick="deleteRec('${r.id}')">&#10005;</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function toggleFlag(id) {
+  const rec=records.find(r=>r.id===id); if(!rec) return;
+  const prev=rec.flagged; rec.flagged=!rec.flagged;
+  addHist(id,'Priority flag',prev?'Flagged':'Normal',rec.flagged?'Flagged':'Normal');
+  saveToStorage(); render();
+}
+
+function deleteRec(id) {
+  if(!confirm('Delete this record?')) return;
+  records=records.filter(r=>r.id!==id); delete history[id];
+  saveToStorage(); render();
+}
+
+function clearAll() {
+  if(!confirm('Clear ALL records and history? This cannot be undone.')) return;
+  records=[]; history={};
+  saveToStorage();
+  document.getElementById('dropZone').style.display='';
+  render();
+}
+
+function openAdd() {
+  editingId=null;
+  document.getElementById('modalTitle').textContent='// New record';
+  ['fAssoc','fName','fAddr','fAcct','fBal','fAtty','fStat','fNote'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+function openEdit(id) {
+  const rec=records.find(r=>r.id===id); if(!rec) return;
+  editingId=id;
+  document.getElementById('modalTitle').textContent='// Edit record';
+  document.getElementById('fAssoc').value=rec.assoc||'';
+  document.getElementById('fName').value=rec.name||'';
+  document.getElementById('fAddr').value=rec.address||'';
+  document.getElementById('fAcct').value=rec.account||'';
+  document.getElementById('fBal').value=rec.balance||'';
+  document.getElementById('fAtty').value=rec.attyName||'';
+  document.getElementById('fStat').value=rec.status||'';
+  document.getElementById('fNote').value=rec.note||'';
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+function saveEdit() {
+  const assoc=document.getElementById('fAssoc').value.trim();
+  const name=document.getElementById('fName').value.trim();
+  const addr=document.getElementById('fAddr').value.trim();
+  const acct=document.getElementById('fAcct').value.trim();
+  const bal =document.getElementById('fBal').value.trim();
+  const atty=document.getElementById('fAtty').value.trim();
+  const stat=document.getElementById('fStat').value.trim();
+  const note=document.getElementById('fNote').value.trim();
+  if (editingId) {
+    const rec=records.find(r=>r.id===editingId);
+    if(rec.status!==stat)   addHist(editingId,'Status change',  rec.status,  stat);
+    if(rec.balance!==bal)   addHist(editingId,'Balance update', rec.balance, bal);
+    if(rec.note!==note)     addHist(editingId,'Note update',    rec.note,    note);
+    if(rec.attyName!==atty) addHist(editingId,'Attorney update',rec.attyName,atty);
+    if(rec.assoc!==assoc)   addHist(editingId,'Association update',rec.assoc,assoc);
+    Object.assign(rec,{assoc,name,address:addr,account:acct,balance:bal,attyName:atty,status:stat,note});
+  } else {
+    const nr={id:uid(),assoc,name,address:addr,account:acct,balance:bal,attyName:atty,status:stat,note,flagged:false};
+    records.push(nr);
+    addHist(nr.id,'Record created','—',name||'new record');
+  }
+  closeModal(); saveToStorage(); render();
+}
+
+function closeModal() { document.getElementById('editOverlay').classList.remove('open'); }
+
+/* ── PDF / File handling ── */
+const FILE_KEY = 'atty_tracker_files_v2';
+let fileStore = {};
+
+function loadFiles() {
+  try {
+    const raw = localStorage.getItem(FILE_KEY);
+    if (raw) fileStore = JSON.parse(raw);
+  } catch(e) {}
+}
+
+function saveFiles() {
+  try { localStorage.setItem(FILE_KEY, JSON.stringify(fileStore)); } catch(e) {
+    alert('Storage limit reached. Some PDFs may not have been saved. Consider removing older files to free space.');
+  }
+}
+
+function renderFilePills(id) {
+  const files = fileStore[id] || [];
+  return files.map((f,i) => `
+    <span class="file-pill" onclick="openPdf('${id}',${i})" title="${f.name}">
+      &#128196; ${f.name.length>12?f.name.slice(0,11)+'…':f.name}
+      <span class="del-f" onclick="event.stopPropagation();deleteFile('${id}',${i})" title="Remove">&#10005;</span>
+    </span>
+  `).join('');
+}
+
+function attachFile(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') { alert('Please select a PDF file.'); return; }
+  if (file.size > 4 * 1024 * 1024) { alert('PDF is too large (max 4 MB). Please compress it first.'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    if (!fileStore[id]) fileStore[id] = [];
+    fileStore[id].push({name: file.name, data: e.target.result});
+    saveFiles();
+    addHist(id, 'File attached', '—', file.name);
+    saveToStorage();
+    refreshFilesCell(id);
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function refreshFilesCell(id) {
+  const cell = document.getElementById('fc_'+id);
+  if (!cell) return;
+  cell.innerHTML = renderFilePills(id) + `
+    <label class="file-add-btn" title="Attach PDF">
+      + PDF
+      <input type="file" accept="application/pdf" style="display:none" onchange="attachFile('${id}',this)">
+    </label>`;
+}
+
+function openPdf(id, idx) {
+  const f = (fileStore[id]||[])[idx];
+  if (!f) return;
+  document.getElementById('pdfTitle').textContent = '// ' + f.name;
+  document.getElementById('pdfFrame').src = f.data;
+  document.getElementById('pdfOverlay').classList.add('open');
+}
+
+function deleteFile(id, idx) {
+  if (!confirm('Remove this file?')) return;
+  const fname = (fileStore[id]||[])[idx]?.name || '';
+  if (fileStore[id]) fileStore[id].splice(idx, 1);
+  saveFiles();
+  addHist(id, 'File removed', fname, '—');
+  saveToStorage();
+  refreshFilesCell(id);
+}
+
+function closePdf() {
+  document.getElementById('pdfOverlay').classList.remove('open');
+  document.getElementById('pdfFrame').src = 'about:blank';
+}
+
+function openHist(id) {
+  const rec=records.find(r=>r.id===id);
+  document.getElementById('histTitle').textContent='// '+(rec?rec.name||id:id);
+  const entries=history[id]||[];
+  const body=document.getElementById('histBody');
+  if(!entries.length) {
+    body.innerHTML='<p style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:0.5rem 0">no changes recorded yet</p>';
+  } else {
+    body.innerHTML=[...entries].reverse().map(e=>`
+      <div class="hist-entry">
+        <div class="hist-meta">${e.date}</div>
+        <div class="hist-type">${e.type}</div>
+        <div class="hist-change">${e.from} &rarr; ${e.to}</div>
+      </div>
+    `).join('');
+  }
+  document.getElementById('histOverlay').classList.add('open');
+}
+
+function closeHist() { document.getElementById('histOverlay').classList.remove('open'); }
+
+function printReport() {
+  document.getElementById('printDate').textContent =
+    'GENERATED: '+new Date().toLocaleString()+
+    '  |  FILTER: '+document.getElementById('filterSel').options[document.getElementById('filterSel').selectedIndex].text;
+  window.print();
+}
+
+document.getElementById('fileInput').addEventListener('change', e=>{
+  if(e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+const dz=document.getElementById('dropZone');
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('drag');});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('drag'));
+dz.addEventListener('drop', e=>{
+  e.preventDefault(); dz.classList.remove('drag');
+  if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+document.getElementById('editOverlay').addEventListener('click', e=>{
+  if(e.target===document.getElementById('editOverlay')) closeModal();
+});
+document.getElementById('histOverlay').addEventListener('click', e=>{
+  if(e.target===document.getElementById('histOverlay')) closeHist();
+});
+document.getElementById('pdfOverlay').addEventListener('click', e=>{
+  if(e.target===document.getElementById('pdfOverlay')) closePdf();
+});
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){closeModal();closeHist();closePdf();}
+});
+
+loadFromStorage();
+loadFiles();
+if(records.length) document.getElementById('dropZone').style.display='none';
+render();
+</script>
+</body>
+</html>
