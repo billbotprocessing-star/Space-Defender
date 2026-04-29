@@ -15,6 +15,18 @@
     min-height: 100vh;
     font-family: monospace;
     color: #c8dcff;
+    touch-action: none;
+  }
+  h1 {
+    margin-bottom: 6px;
+    font-size: 24px;
+    letter-spacing: 2px;
+    color: #e0eeff;
+  }
+  #tagline {
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: #6f84a5;
   }
   #hud {
     display: flex;
@@ -37,23 +49,54 @@
     color: #5a7090;
     text-align: center;
   }
+  #touch-controls {
+    display: none;
+    gap: 10px;
+    margin-top: 12px;
+    user-select: none;
+  }
+  #touch-controls button {
+    background: #08162a;
+    color: #c8dcff;
+    border: 1px solid #1a3050;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: monospace;
+  }
+  @media (max-width: 600px) {
+    #hud, #gc { width: 94vw; }
+    #gc { height: calc(94vw * 1.1667); }
+    #touch-controls { display: flex; flex-wrap: wrap; justify-content: center; max-width: 360px; }
+  }
 </style>
 </head>
 <body>
+
+<h1>SPACE DEFENDER</h1>
+<div id="tagline">Defend your sector through 10 waves.</div>
 
 <div id="hud">
   <span>Score: <strong id="score-display">0</strong></span>
   <span id="level-display">Wave 1</span>
   <span>Lives: <strong id="lives-display">3</strong></span>
+  <span>Retries: <strong id="retries-display">3</strong></span>
 </div>
 <canvas id="gc" width="480" height="560"></canvas>
 <div id="msg">Arrow keys / WASD to move &nbsp;|&nbsp; Space to shoot &nbsp;|&nbsp; Press Space to start</div>
+<div id="touch-controls" aria-label="Touch controls">
+  <button data-key="ArrowLeft">Left</button>
+  <button data-key="ArrowUp">Up</button>
+  <button data-key="ArrowDown">Down</button>
+  <button data-key="ArrowRight">Right</button>
+  <button data-key=" ">Shoot / Start</button>
+</div>
 
 <script>
 const C = document.getElementById('gc');
 const ctx = C.getContext('2d');
 const W = C.width, H = C.height;
 const MAX_WAVES = 10;
+const MAX_RETRIES = 3;
 
 // Per-wave config: cols, rows, speed, enemyFireRate, bossHP (0=no boss)
 const WAVE_CONFIG = [
@@ -69,11 +112,11 @@ const WAVE_CONFIG = [
   { cols:10, rows:5, speed:2.3,  fireRate:16, bossHP:100 }, // wave 10 – final boss
 ];
 
-let state = 'idle', score = 0, lives = 3, wave = 1;
+let state = 'idle', score = 0, lives = 3, wave = 1, retriesLeft = MAX_RETRIES;
 let ship, bullets, enemies, particles, powerups, stars, boss;
 let keys = {}, frame = 0, raf;
 let shootCooldown = 0, enemyShootCooldown = 0, enemyBullets = [];
-let shieldTimer = 0, rapidTimer = 0, spreadActive = false;
+let shieldTimer = 0, rapidTimer = 0, spreadTimer = 0;
 let waveTransition = false;
 
 function initStars() {
@@ -84,15 +127,41 @@ function initStars() {
 }
 
 function initGame() {
-  score = 0; lives = 3; wave = 1; frame = 0;
+  score = 0; lives = 3; wave = 1; retriesLeft = MAX_RETRIES; frame = 0;
   ship = { x: W / 2, y: H - 70, w: 28, h: 28, speed: 4 };
   bullets = []; enemies = []; particles = []; powerups = []; enemyBullets = [];
   boss = null; waveTransition = false;
-  shootCooldown = 0; shieldTimer = 0; rapidTimer = 0; spreadActive = false;
+  shootCooldown = 0; shieldTimer = 0; rapidTimer = 0; spreadTimer = 0;
   initStars(); spawnWave();
 }
 
 function cfg() { return WAVE_CONFIG[Math.min(wave - 1, MAX_WAVES - 1)]; }
+
+function triggerDefeat() {
+  if (state !== 'play') return;
+  if (retriesLeft > 0) {
+    retriesLeft--;
+    state = 'retry';
+  } else {
+    state = 'gameover';
+  }
+}
+
+function useRetry() {
+  lives = 3;
+  ship = { x: W / 2, y: H - 70, w: 28, h: 28, speed: 4 };
+  bullets = [];
+  enemyBullets = [];
+  particles = [];
+  powerups = [];
+  shootCooldown = 0;
+  shieldTimer = 0;
+  rapidTimer = 0;
+  spreadTimer = 0;
+  waveTransition = false;
+  spawnWave();
+  state = 'play';
+}
 
 function spawnWave() {
   waveTransition = false;
@@ -208,7 +277,10 @@ function drawBullet(b, enemy = false) {
   ctx.save();
   ctx.shadowBlur = 6; ctx.shadowColor = enemy ? '#ff6060' : '#60e0ff';
   ctx.fillStyle = enemy ? '#ff6060' : '#60e0ff';
-  ctx.beginPath(); ctx.roundRect(b.x-2, b.y-6, 4, 12, 2); ctx.fill();
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(b.x-2, b.y-6, 4, 12, 2);
+  else ctx.rect(b.x-2, b.y-6, 4, 12);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -226,13 +298,14 @@ function drawPowerup(p) {
 function drawHUD() {
   document.getElementById('score-display').textContent = score;
   document.getElementById('lives-display').textContent = lives;
+  document.getElementById('retries-display').textContent = retriesLeft;
   document.getElementById('level-display').textContent = 'Wave ' + wave + ' / ' + MAX_WAVES;
-  if (rapidTimer > 0 || shieldTimer > 0 || spreadActive) {
+  if (rapidTimer > 0 || shieldTimer > 0 || spreadTimer > 0) {
     ctx.font = '11px monospace'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(160,240,160,0.9)';
     let txt = '';
     if (shieldTimer > 0) txt += '[SHIELD] ';
     if (rapidTimer > 0) txt += '[RAPID] ';
-    if (spreadActive) txt += '[SPREAD] ';
+    if (spreadTimer > 0) txt += '[SPREAD] ';
     ctx.fillText(txt, 8, H - 8);
   }
 }
@@ -283,7 +356,7 @@ function updateBoss() {
 
   // Boss-ship collision
   if (Math.abs(boss.x - ship.x) < 50 && Math.abs(boss.y - ship.y) < 40) {
-    if (shieldTimer <= 0) { lives--; if (lives <= 0) state = 'gameover'; }
+    if (shieldTimer <= 0) { lives--; if (lives <= 0) triggerDefeat(); }
     else shieldTimer = 0;
   }
 }
@@ -295,7 +368,7 @@ function loop() {
   ctx.fillStyle = '#050a14'; ctx.fillRect(0,0,W,H);
   drawStars();
 
-  if (state === 'idle' || state === 'gameover' || state === 'win') {
+  if (state === 'idle' || state === 'retry' || state === 'gameover' || state === 'win') {
     ctx.textAlign = 'center';
     if (state === 'idle') {
       ctx.fillStyle = 'rgba(74,181,245,0.9)'; ctx.font = 'bold 28px monospace';
@@ -303,12 +376,19 @@ function loop() {
       ctx.fillStyle = 'rgba(200,220,255,0.7)'; ctx.font = '14px monospace';
       ctx.fillText('10 waves of escalating chaos', W/2, H/2-14);
       ctx.fillText('Press SPACE to launch', W/2, H/2+18);
+    } else if (state === 'retry') {
+      ctx.fillStyle = 'rgba(255,210,80,0.95)'; ctx.font = 'bold 26px monospace';
+      ctx.fillText('RETRY AVAILABLE', W/2, H/2-50);
+      ctx.fillStyle = 'rgba(200,220,255,0.7)'; ctx.font = '14px monospace';
+      ctx.fillText('Retries left: ' + retriesLeft + ' / ' + MAX_RETRIES, W/2, H/2-18);
+      ctx.fillText('Wave ' + wave + ' / ' + MAX_WAVES, W/2, H/2+10);
+      ctx.fillText('Press SPACE to retry this wave', W/2, H/2+38);
     } else if (state === 'gameover') {
       ctx.fillStyle = 'rgba(240,100,100,0.95)'; ctx.font = 'bold 26px monospace';
       ctx.fillText('GAME OVER', W/2, H/2-50);
       ctx.fillStyle = 'rgba(200,220,255,0.7)'; ctx.font = '14px monospace';
-      ctx.fillText('Wave ' + wave + ' / ' + MAX_WAVES, W/2, H/2-18);
-      ctx.fillText('Score: ' + score, W/2, H/2+10);
+      ctx.fillText('No retries left', W/2, H/2-18);
+      ctx.fillText('Final Score: ' + score, W/2, H/2+10);
       ctx.fillText('Press SPACE to restart', W/2, H/2+38);
     } else {
       ctx.fillStyle = 'rgba(100,240,160,0.95)'; ctx.font = 'bold 26px monospace';
@@ -335,7 +415,7 @@ function loop() {
   if (keys[' '] && shootCooldown === 0) {
     shootCooldown = rapidTimer > 0 ? 5 : 13;
     bullets.push({ x: ship.x, y: ship.y-18, vy: -9 });
-    if (spreadActive) {
+    if (spreadTimer > 0) {
       bullets.push({ x: ship.x, y: ship.y-14, vy: -8, vx: -2.5 });
       bullets.push({ x: ship.x, y: ship.y-14, vy: -8, vx:  2.5 });
     }
@@ -396,9 +476,9 @@ function loop() {
     if (!e.alive) return;
     if (Math.abs(e.x-ship.x) < 22 && Math.abs(e.y-ship.y) < 22) {
       if (!hasShield) { lives--; spawnParticles(ship.x, ship.y, '#4ab5f5', 12); }
-      e.alive = false; if (lives <= 0) { state='gameover'; return; }
+      e.alive = false; if (lives <= 0) { triggerDefeat(); return; }
     }
-    if (e.y > H) { lives--; e.alive=false; if (lives<=0) state='gameover'; }
+    if (e.y > H) { lives--; e.alive=false; if (lives<=0) triggerDefeat(); }
   });
 
   // Enemy bullet-ship collisions
@@ -406,7 +486,7 @@ function loop() {
     if (Math.abs(b.x-ship.x) < 14 && Math.abs(b.y-ship.y) < 14) {
       if (!hasShield) { lives--; spawnParticles(ship.x,ship.y,'#ff8080',8); }
       else shieldTimer = Math.max(0, shieldTimer-30);
-      if (lives <= 0) state = 'gameover';
+      if (lives <= 0) triggerDefeat();
       return false;
     }
     return true;
@@ -418,12 +498,14 @@ function loop() {
     if (Math.abs(p.x-ship.x)<18 && Math.abs(p.y-ship.y)<18) {
       if (p.type==='shield') shieldTimer=360;
       else if (p.type==='rapid') rapidTimer=360;
-      else spreadActive=true;
+      else if (p.type==='spread') spreadTimer=360;
       return false;
     }
     return p.life>0 && p.y<H+20;
   });
   if (rapidTimer>0) rapidTimer--;
+  if (shieldTimer>0) shieldTimer--;
+  if (spreadTimer>0) spreadTimer--;
 
   // Particles
   particles = particles.filter(p => {
@@ -465,14 +547,44 @@ function loop() {
 }
 
 document.addEventListener('keydown', e => {
-  keys[e.key] = true;
-  if (e.key === ' ') {
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  keys[key] = true;
+  if (key === ' ') {
     e.preventDefault();
-    if (state==='idle'||state==='gameover'||state==='win') { state='play'; initGame(); }
+    if (!e.repeat) {
+      if (state === 'retry') useRetry();
+      else if (state==='idle'||state==='gameover'||state==='win') { state='play'; initGame(); }
+    }
   }
-  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(key)) e.preventDefault();
 });
-document.addEventListener('keyup', e => { keys[e.key] = false; });
+document.addEventListener('keyup', e => {
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  keys[key] = false;
+});
+
+document.querySelectorAll('#touch-controls button').forEach(btn => {
+  const key = btn.dataset.key;
+  const press = e => {
+    e.preventDefault();
+    keys[key] = true;
+    if (key === ' ') {
+      if (state === 'retry') useRetry();
+      else if (state==='idle'||state==='gameover'||state==='win') {
+        state='play';
+        initGame();
+      }
+    }
+  };
+  const release = e => {
+    e.preventDefault();
+    keys[key] = false;
+  };
+  btn.addEventListener('pointerdown', press);
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointerleave', release);
+  btn.addEventListener('pointercancel', release);
+});
 
 initStars(); loop();
 </script>
